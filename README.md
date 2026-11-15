@@ -95,20 +95,32 @@ Follow these plain-English steps to open, set up and run the project from start 
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/andrewswiniarski-hue/Census_Uncertainty_Analysis.git
-cd Census_Uncertainty_Analysis
+git clone https://github.com/Justus688/Final-Handoff-Census-Uncertainty-Saxa-3-.git
+cd Final-Handoff-Census-Uncertainty-Saxa-3-
 ```
 
 ### Step 2: Set Up Environment & Install Dependencies
 
-```bash
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+The project runs in its own virtual environment (`.venv`), a private copy of Python holding exactly the package versions in `requirements.txt`. Install and run everything through that copy, not through a system or Anaconda Python, whose older packages can break the app.
 
-# Install exact requirements (pytest is only for the tests)
-pip install -r requirements.txt -r requirements-dev.txt
+**Windows (PowerShell).** These commands call the virtual environment's Python directly, so they work without activating it:
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
 ```
+
+**Mac / Linux:**
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt -r requirements-dev.txt
+```
+
+On Windows, wherever a command further down starts with `python`, type `.venv\Scripts\python.exe` instead (or activate the environment first with `.venv\Scripts\Activate.ps1`).
+
+`requirements-dev.txt` adds pytest, needed only for the tests. Always install with `python -m pip`, not plain `pip`: plain `pip` is often not on the PATH on Windows, and when it is, it can install into a different Python than the one that runs the app.
 
 If you will refresh data or use the assistant, copy `.env.example` to a new file named `.env` and paste your key(s) in. `.env` is git-ignored, so keys never leave your machine.
 
@@ -116,8 +128,12 @@ If you will refresh data or use the assistant, copy `.env.example` to a new file
 
 The dashboard's data is already in `data/raw/`, so it runs immediately:
 
+```powershell
+.venv\Scripts\python.exe -m streamlit run Streamlit/us_county_explorer.py   # Windows
+```
+
 ```bash
-streamlit run Streamlit/us_county_explorer.py
+python -m streamlit run Streamlit/us_county_explorer.py                      # Mac / Linux, with .venv activated
 ```
 
 It opens at <http://localhost:8501>. Pick a state, then a county, on the map or in the search box. See [`Streamlit/README.md`](Streamlit/README.md) for what each card shows.
@@ -155,6 +171,15 @@ python tools/product_scope.py --online   # re-crawl the Census Data API catalog 
 ```
 
 Or simply open the committed [`product_report.html`](product_report.html) in a browser. See [`tools/README.md`](tools/README.md).
+
+### Troubleshooting
+
+* **`pip` (or `python`) "is not recognized".** Use the commands in Step 2 exactly as written: on Windows they go through `py` and `.venv\Scripts\python.exe`, so nothing needs to be on the PATH. If `py` is not recognized either, Python is not installed: install Python 3.13 from <https://www.python.org/downloads/>.
+* **The assistant says "The AI assistant is not available right now."** Look at the terminal that is running Streamlit. Each failed request prints `Assistant request failed` with the actual cause underneath. The usual causes:
+  * The app was started with a Python other than `.venv`'s, such as Anaconda's. Older packages there break the request: Anaconda's Brotli 1.0.9 makes every call fail with `TypeError: process() takes no keyword arguments`. Stop Streamlit and start it again with the Step 3 command.
+  * The key in `.env` is wrong or has run out of credit (`AuthenticationError` or a `400`/`403` error). Check it at <https://console.anthropic.com/>.
+  * `.env` was edited while the app was running. Stop Streamlit (Ctrl+C) and start it again.
+* **The assistant panel says it is off.** No `ANTHROPIC_API_KEY` was found in `.env`. Everything else in the dashboard works without it.
 
 ---
 

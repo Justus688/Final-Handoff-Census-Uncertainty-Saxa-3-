@@ -144,6 +144,7 @@ acs5_2024_usdash_alloc,rucc_2023}_* -- regenerate with:
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 from dataclasses import dataclass
@@ -756,9 +757,13 @@ button[data-testid="stBaseButton-primary"]:hover {
 .goal-card p { color: #3C3A3B; margin: 0; font-size: 14px; line-height: 1.45; }
 .step-card {
     border: 1px solid #d7e2ef; border-top: 5px solid #205493;
-    border-radius: 9px; padding: 17px; min-height: 145px;
-    background: white; box-sizing: border-box;
+    border-radius: 9px; padding: 17px;
+    min-height: 190px;  /* a floor, not a cap: a fixed height clipped the text below ~1300px wide */
+    display: flex; flex-direction: column; box-sizing: border-box;
+    background: white;
 }
+.step-card h4 { flex: 0 0 auto; }
+.step-card p { flex: 1 1 auto; }
 .step-number {
     display: inline-block; background: #FFC222; color: #3C3A3B;
     font-weight: 800; border-radius: 50%; width: 29px; height: 29px;
@@ -1354,9 +1359,143 @@ def _county_fact_sheet(data: dict, code: str, unavailable: set[str]) -> dict:
                 blanks, values = _published_figures(data, code, key, measure, row, state_row, acs1_row, e, m)
                 entry["blanks"].update(blanks)
                 entry["values"].update(values)
-        measures[assistant.measure_id(key)] = entry
+        measures[assistant_text.measure_id(key)] = entry
 
     return {"county": {"blanks": county}, "measures": measures}
+
+
+# ---------------------------------------------------------------------------
+# "Download these cards (Excel)": a "Cards" sheet with one row per chosen
+# card, built from the same fact sheet as the assistant so the file and the
+# cards cannot disagree, and a "Data dictionary" sheet defining every column.
+# Similar-county counts and the outside-rule checks are left out: they are
+# assistant-only, not on the cards.
+# ---------------------------------------------------------------------------
+
+_STATUS_PLAIN = {
+    "published": "Published",
+    "suppressed": "Suppressed by the Census Bureau",
+    "controlled": "Controlled to official population estimates (no sampling error)",
+    "no_moe": "No margin of error published",
+    "top_coded": "Top-coded at $250,001 (the true median is at least this)",
+    "not_in_local_data": "Not in this dashboard's local data",
+}
+# -- (CSV header, fact-sheet "values" key, multiplier, decimals). Decimals
+# -- follow the cards: whole numbers for figures, scores and ranks; one
+# -- decimal for CVs, rates and shares.
+_CSV_NUMBERS = (
+    ("Estimate", "estimate", 1, 0), ("Margin of error (90%)", "moe", 1, 0),
+    ("90% range low", "ci_low", 1, 0), ("90% range high", "ci_high", 1, 0), ("CV (%)", "cv", 100, 1),
+    ("Rate (%)", "rate", 1, 1), ("Rate 90% range low (%)", "rate_ci_low", 1, 1),
+    ("Rate 90% range high (%)", "rate_ci_high", 1, 1),
+    ("Reliability score", "score", 1, 0),
+)
+_CSV_MORE_NUMBERS = (
+    ("Sampling sub-score", "sampling_score", 1, 0), ("Imputation sub-score", "imputation_score", 1, 0),
+    ("Share imputed (%)", "share_imputed", 1, 1),
+    ("CV rank in state (1 = lowest CV)", "cv_rank", 1, 0), ("Counties ranked", "cv_rank_n", 1, 0),
+    ("State value", "state_value", 1, 0), ("State margin of error", "state_moe", 1, 0),
+    ("State-rate benchmark", "state_rate_benchmark", 1, 0),
+    ("State-rate benchmark margin of error", "state_rate_benchmark_moe", 1, 0),
+)
+# -- The "Data dictionary" sheet: one plain-English definition per column, in
+# -- column order (tests/test_cards_download.py checks every column has one)
+_CARDS_DICTIONARY = {
+    "County": "The county the figures describe.",
+    "State": "The state the county is in.",
+    "ACS period": "The American Community Survey (ACS) release: estimates pooled from five years of survey responses.",
+    "Topic": "The dashboard topic group the card sits under.",
+    "Measure": "The card's name: what the estimate counts or measures.",
+    "Census table": "The ACS detailed table the figure comes from, for looking it up on data.census.gov.",
+    "Status": "Whether the Census Bureau published a usable figure. Published: an estimate and a margin of error. "
+              "Controlled to official population estimates: an estimate with no sampling error, so no margin of "
+              "error. No margin of error published: an estimate without a margin. Suppressed: no estimate, usually "
+              "because too few sampled households fall in the group. Top-coded: income at the Census Bureau's "
+              "$250,001 cap. Not in this dashboard's local data: the data files need to be re-downloaded.",
+    "Estimate": "The ACS estimate as published, or the sum of published table cells for a measure built from "
+                "several of them. Dollar figures are in dollars; counts are people or households.",
+    "Margin of error (90%)": "How far the true value could be from the estimate, at 90% confidence, as published. "
+                             "For a sum of cells it is combined with the Census Bureau's formula: the square root "
+                             "of the sum of the squared margins.",
+    "90% range low": "Estimate minus the margin of error (never below zero). The true value is likely at or above this.",
+    "90% range high": "Estimate plus the margin of error. The true value is likely at or below this.",
+    "CV (%)": "Coefficient of variation: the standard error (the margin of error divided by 1.645) as a percent of "
+              "the estimate. Lower means more precise. 12% and 30% are the lines the reliability band uses.",
+    "Rate (%)": "The estimate as a percent of its own universe (its true denominator, such as children 5 to 17 "
+                "whose poverty status is known), with its margin from the Census Bureau's proportion formula. "
+                "Blank for medians and other measures that are not a share of a group.",
+    "Rate 90% range low (%)": "The rate minus its margin of error (never below 0%).",
+    "Rate 90% range high (%)": "The rate plus its margin of error (never above 100%).",
+    "Reliability score": "0 to 100, higher is more reliable. The average of the sampling sub-score and the "
+                         "imputation sub-score, or the sampling sub-score alone when the measure has no imputation "
+                         "data. This project's methodology, not a Census Bureau product. Blank for total population.",
+    "Reliability band": "Higher, Moderate or Lower reliability. The worse of two readings: the score (Higher at 75 "
+                        "or more, Moderate at 50 or more) and the CV alone (Higher at 12% or less, Moderate at 30% "
+                        "or less), so the band is never better than the CV allows.",
+    "Sampling sub-score": "The part of the score set by the CV: 100 at a CV of 0, 75 at 12%, 50 at 30%, and 0 "
+                          "where the margin of error equals the estimate (a CV of about 61%), straight lines between.",
+    "Imputation sub-score": "For income and poverty cards only: how much of this county's data the Census Bureau "
+                            "imputed (filled in for people who skipped the question), compared with every US county. "
+                            "100 at or below the national median, 50 at the 75th percentile, 0 for the most "
+                            "imputed. Income uses Table B99192; poverty uses family poverty status, Table B99172, "
+                            "as a proxy.",
+    "Share imputed (%)": "Median household income card only: the percent of households whose income the Census "
+                         "Bureau imputed rather than took from their answers (Table B99192).",
+    "CV rank in state (1 = lowest CV)": "Where this county's CV ranks among the counties in its state that have a "
+                                        "CV for this measure. 1 is the most precise.",
+    "Counties ranked": "How many counties in the state were ranked for this measure.",
+    "State value": "The state's own published figure for this measure, for medians and percentages, as the card's "
+                   "\"Compare to state\" row shows it.",
+    "State margin of error": "The margin of error (90%) of the state value, as published.",
+    "State-rate benchmark": "For counts: what this county's number would be at the state's rate, the state's rate "
+                            "applied to this county's own universe. This project's calculation, not a published figure.",
+    "State-rate benchmark margin of error": "The benchmark's margin of error (90%), combining the state rate's and "
+                                            "the county universe's margins as if independent, which makes it "
+                                            "conservative.",
+    "Source": "Where the figure comes from, for a citation.",
+}
+
+
+def _cards_xlsx(sheet: dict, selected_labels: list[str]) -> bytes:
+    """The chosen cards as an Excel workbook: a "Cards" sheet, one row per
+    card in the order chosen, and a "Data dictionary" sheet."""
+    from openpyxl.styles import Alignment  # openpyxl is in requirements.txt; only this needs it
+    county = sheet["county"]["blanks"]
+    rows = []
+    for key in selected_labels:
+        m = sheet["measures"][assistant_text.measure_id(key)]
+        v, b = m["values"], m["blanks"]
+        nums = lambda spec: {h: v[k] * f if k in v else None for h, k, f, _ in spec}  # noqa: E731
+        rows.append({
+            "County": county.get("name"), "State": county.get("state"), "ACS period": county.get("period"),
+            "Topic": m["topic"], "Measure": m["label"], "Census table": m["table"],
+            "Status": _STATUS_PLAIN.get(m["status"], m["status"]),
+            **nums(_CSV_NUMBERS),
+            "Reliability band": b.get("band"),
+            **nums(_CSV_MORE_NUMBERS),
+            "Source": f"U.S. Census Bureau, American Community Survey {ACS_VINTAGE} estimates, table "
+                      f"{m['table']}. Reliability score and state-rate benchmark: this project's "
+                      f"methodology, not Census Bureau figures.",
+        })
+    df = pd.DataFrame(rows)
+    for h, _, _, decimals in _CSV_NUMBERS + _CSV_MORE_NUMBERS:
+        col = pd.to_numeric(df[h]).round(decimals)
+        df[h] = col.astype("Int64") if decimals == 0 else col  # 110656, not 110656.0
+    dictionary = pd.DataFrame({"Column": list(df.columns),
+                               "What it means": [_CARDS_DICTIONARY[c] for c in df.columns]})
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as xl:
+        for name, frame, widths in (("Cards", df, None), ("Data dictionary", dictionary, (36, 120))):
+            frame.to_excel(xl, sheet_name=name, index=False)
+            ws = xl.sheets[name]
+            ws.freeze_panes = "A2"
+            for i, col in enumerate(frame.columns):
+                letter = ws.cell(row=1, column=i + 1).column_letter
+                ws.column_dimensions[letter].width = widths[i] if widths else min(max(len(col), 12) + 2, 40)
+            if widths:
+                for cell in ws["B"]:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+    return out.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -2405,14 +2544,13 @@ def render_welcome() -> None:
     st.markdown('<div class="welcome-section">Where should I start?</div>', unsafe_allow_html=True)
     step1, step2, step3 = st.columns(3)
     for col, number, title, desc in [
-        (step1, "1", "Choose a place",
-         "Open <b>County explorer</b>, click a state and county on the map, or search for a state and county by name."),
-        (step2, "2", "Choose your data",
-         "Start with population or income, then add poverty, employment, education, housing, health "
-         "insurance, disability, language, or transportation measures &mdash; 26 figures across ten "
-         "topics in all."),
-        (step3, "3", "Check uncertainty",
-         "Every ACS estimate has a margin of error. Use the confidence interval and CV to understand how precise it is."),
+        (step1, "1", "How do I choose a place?",
+         "Open <b>County explorer</b>, choose a state and county on the map, or search by place name."),
+        (step2, "2", "Which data can I explore?",
+         "Explore population, income, employment, education, housing, health insurance, disability, "
+         "language, and transportation measures &mdash; 26 figures across ten topics."),
+        (step3, "3", "How can I understand uncertainty?",
+         "Review the margin of error, confidence interval, and CV to understand the precision of each ACS estimate."),
     ]:
         with col:
             st.markdown(
@@ -2421,18 +2559,18 @@ def render_welcome() -> None:
                 unsafe_allow_html=True,
             )
 
-    st.markdown('<div class="welcome-section">What can I do with the County explorer?</div>', unsafe_allow_html=True)
+    st.markdown('<div class="welcome-section">What can I do with the County Explorer?</div>', unsafe_allow_html=True)
     goals = [
-        ("\U0001F4CA Find a Census number",
+        ("\U0001F4CA Which Census figures can I explore?",
          "Find population, income, poverty, employment, education, housing, health insurance, "
          "disability, language, or transportation figures for a county."),
-        ("\U0001F4DD Write a grant application",
+        ("\U0001F4DD How can I support a grant application?",
          "Find a statistic, review its uncertainty, and use <b>Show me the statistics</b> for a ready-to-copy citation sentence."),
-        ("\U0001F50E Compare counties",
+        ("\U0001F50E How can I compare counties?",
          "Turn on a card's <b>Compare to state</b> switch to see your county against the state, or open the "
          "<b>Statistical peers</b> tab to find counties that are statistically indistinguishable from yours."),
-        ("\u26A0\uFE0F Check how reliable a number is",
-         "Use the margin of error, 90% confidence interval, and coefficient of variation to understand uncertainty."),
+        ("\u26A0\uFE0F How precise is an estimate?",
+         "Use the margin of error, 90% confidence interval, and coefficient of variation to understand the precision of an estimate."),
     ]
     for row in (goals[:2], goals[2:]):
         cols = st.columns(2)
@@ -2531,9 +2669,9 @@ def render_welcome() -> None:
     cols = st.columns(4)
     for col, title, desc in zip(
         cols,
-        ["1. Find your county", "2. Add Poverty", "3. Review uncertainty", "4. Get your citation"],
+        ["1. How do I find my county?", "2. Which poverty measure do I need?", "3. How do I review uncertainty?", "4. Where can I find my citation?"],
         [
-            "Open County explorer and select your county.",
+            "Open County explorer and select a county.",
             "Choose the poverty measure you need.",
             "Look at the estimate, MOE, and confidence interval.",
             'Open "Show me the statistics" to copy the citation.',
@@ -2573,23 +2711,25 @@ def render_welcome() -> None:
         )
 
     st.markdown('<div class="welcome-section">How can I use the explorer?</div>', unsafe_allow_html=True)
-    with st.expander("Find a state or county"):
+    with st.expander("How can I find a state or county?"):
         st.markdown(
-            "Open **County explorer**. Click a state on the national map, then a county, or use "
+            "Open **County explorer**. Choose a state on the national map, then a county, or use "
             "**Search for a state** and **Search for a county**. Use **Back to national state view** to return."
         )
-    with st.expander("Filter the counties shown on the map"):
+    with st.expander("How can I filter the counties shown on the map?"):
         st.markdown(
             "The panel to the left of the map has **Metro / nonmetro**, **Population size**, "
             "**Search for a state**, **Search for a county**, and **Color the map by** to "
             "narrow or recolor the map."
         )
-    with st.expander("Choose the figures you want to see"):
+    with st.expander("How can I choose the figures I want to see?"):
         st.markdown(
             "After selecting a county, use the checklist to choose measures. The app starts with "
             "**total population** and **median household income**, then lets you add poverty, "
             "employment, education, income brackets, health insurance, disability, language, "
-            "housing, and transportation \u2014 26 figures across ten topics."
+            "housing, and transportation \u2014 26 figures across ten topics. Below the cards, "
+            "**Download these cards (Excel)** saves every figure on the cards you chose, one row per card, "
+            "with a data dictionary tab that defines each column."
         )
 
     st.markdown('<div class="welcome-section">What questions can this tool help me answer?</div>', unsafe_allow_html=True)
@@ -2623,7 +2763,7 @@ def render_welcome() -> None:
         )
 
     st.markdown('<div class="welcome-section">What are the limits of this explorer?</div>', unsafe_allow_html=True)
-    with st.expander("Know what this tool does not do"):
+    with st.expander("What is included in this explorer, and what is outside its scope?"):
         st.markdown(
             "**This tool does not:**\n"
             "- provide neighborhood-level estimates;\n"
@@ -2640,10 +2780,15 @@ def render_welcome() -> None:
     st.markdown(
         "<div>"
         '<span class="glossary-pill">ACS \u2014 American Community Survey</span>'
+        '<span class="glossary-pill">RUCC \u2014 Rural-Urban Continuum Codes</span>'
+        '<span class="glossary-pill">ERS \u2014 USDA Economic Research Service</span>'
         '<span class="glossary-pill">MOE \u2014 Margin of Error</span>'
         '<span class="glossary-pill">CV \u2014 Coefficient of Variation</span>'
+        '<span class="glossary-pill">SE \u2014 Standard Error</span>'
         '<span class="glossary-pill">90% CI \u2014 90% Confidence Interval</span>'
         '<span class="glossary-pill">Statistical Peer \u2014 90% Tie Set</span>'
+        '<span class="glossary-pill">Imputation \u2014 A statistical process used to fill in missing or incomplete responses</span>'
+        '<span class="glossary-pill">Reliability Score \u2014 0\u2013100, the average of a sampling sub-score set from the CV and an imputation sub-score</span>'
         "</div>",
         unsafe_allow_html=True,
     )
@@ -3360,6 +3505,20 @@ def _explorer_cards_fragment(
                     _render_measure_card(lbl)
                     if lbl == "Median gross rent":
                         _rent_context_panel(row)
+
+    if selected_labels:
+        sheet = _county_fact_sheet_cached(code, tuple(sorted(unavailable)))
+        st.download_button(
+            "Download these cards (Excel)",
+            data=_cards_xlsx(sheet, selected_labels),
+            file_name=f"{assistant_text.measure_id(label)}_acs_{assistant_text.measure_id(ACS_VINTAGE)}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click="ignore",
+            icon=":material/download:",
+            key="cards_download",
+        )
+        st.caption("One row per card shown above, with the same figures, ranges, CVs and reliability scores, "
+                   "plus a Data dictionary tab that defines every column.")
 
 
 # ---------------------------------------------------------------------------

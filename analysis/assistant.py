@@ -33,6 +33,7 @@ Plan (on the main branch): docs/superpowers/plans/2026-10-10-county-ai-assistant
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import unicodedata
@@ -45,6 +46,8 @@ import pydantic
 from dotenv import load_dotenv
 
 from analysis import assistant_text as text
+
+log = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,11 +92,7 @@ class UnknownBlank(KeyError):
     """A blank in the model's text that the fact sheet does not offer."""
 
 
-def measure_id(registry_key: str) -> str:
-    """Blank-name form of a measure registry key: lower case, every run of
-    other characters becomes one underscore, none at the ends.
-    "Poverty: 5-17" -> "poverty_5_17"."""
-    return re.sub(r"[^a-z0-9]+", "_", registry_key.lower()).strip("_")
+measure_id = text.measure_id  # defined in assistant_text so the dashboard needs no anthropic for it
 
 
 def _available_rules() -> list[str]:
@@ -386,16 +385,11 @@ def ask(client, sheet: dict, on_screen: list[str], history: list[tuple[str, str]
                 output_config={"effort": "low"},
                 output_format=Reply,
             )
-        except anthropic.AuthenticationError:
-            return done("unavailable", text.UNAVAILABLE, attempt)
-        except anthropic.RateLimitError:
-            return done("unavailable", text.UNAVAILABLE, attempt)
-        except anthropic.APIStatusError:
-            return done("unavailable", text.UNAVAILABLE, attempt)
-        except anthropic.APIConnectionError:
-            return done("unavailable", text.UNAVAILABLE, attempt)
-        except pydantic.ValidationError:
-            # -- the reply did not match the four-field schema
+        except (anthropic.APIError, pydantic.ValidationError):
+            # -- bad key, rate limit, network, or a reply that did not match the
+            # -- four-field schema. Users see the fixed line; the terminal running
+            # -- Streamlit gets the real cause (README, "Troubleshooting").
+            log.exception("Assistant request failed")
             return done("unavailable", text.UNAVAILABLE, attempt)
 
         _add_usage(usage, getattr(response, "usage", None))

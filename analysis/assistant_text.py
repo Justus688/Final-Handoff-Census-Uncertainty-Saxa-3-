@@ -20,7 +20,16 @@ Rules for this file: no em dashes; "U.S. Census Bureau" on first mention and
 
 from __future__ import annotations
 
+import re
 from typing import NamedTuple
+
+
+def measure_id(registry_key: str) -> str:
+    """Blank-name form of a measure registry key: lower case, every run of
+    other characters becomes one underscore, none at the ends.
+    "Poverty: 5-17" -> "poverty_5_17". Lives here, not in assistant.py, so
+    the dashboard can use it when the anthropic package is not installed."""
+    return re.sub(r"[^a-z0-9]+", "_", registry_key.lower()).strip("_")
 
 
 class Preset(NamedTuple):

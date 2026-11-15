@@ -5,7 +5,7 @@
 # pandas and numpy.
 #
 # Install alongside the main requirements:
-#     pip install -r requirements.txt -r requirements-dev.txt
+#     python -m pip install -r requirements.txt -r requirements-dev.txt
 #
 # Then:
 #     python -m pytest tests -q

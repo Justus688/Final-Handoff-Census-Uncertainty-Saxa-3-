@@ -287,20 +287,20 @@ figcaption b { color: var(--ink); }
   </div>
   <ol class="steps-num">
     <li><b>Clone and install</b>
-<pre data-os="win"><code>git clone https://github.com/andrewswiniarski-hue/Census_Uncertainty_Analysis.git
-cd Census_Uncertainty_Analysis
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt -r requirements-dev.txt</code></pre>
-<pre data-os="mac" hidden><code>git clone https://github.com/andrewswiniarski-hue/Census_Uncertainty_Analysis.git
-cd Census_Uncertainty_Analysis
-python3 -m venv .venv
+<pre data-os="win"><code>git clone https://github.com/Justus688/Final-Handoff-Census-Uncertainty-Saxa-3-.git
+cd Final-Handoff-Census-Uncertainty-Saxa-3-
+py -3.13 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt</code></pre>
+<pre data-os="mac" hidden><code>git clone https://github.com/Justus688/Final-Handoff-Census-Uncertainty-Saxa-3-.git
+cd Final-Handoff-Census-Uncertainty-Saxa-3-
+python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt</code></pre>
-      <p class="small muted">Until the handoff is merged into <code>main</code>, add <code>git checkout final-handoff</code> after <code>cd</code>.</p>
+python -m pip install -r requirements.txt -r requirements-dev.txt</code></pre>
+      <p class="small muted">Install and run through the project's <code>.venv</code>, never a system or Anaconda Python: older packages there break the AI assistant. On Windows, wherever a command below starts with <code>python</code>, type <code>.venv\Scripts\python.exe</code> instead.</p>
     </li>
     <li><b>Start the dashboard</b>
-<pre><code>streamlit run Streamlit/us_county_explorer.py</code></pre>
+<pre data-os="win"><code>.venv\Scripts\python.exe -m streamlit run Streamlit/us_county_explorer.py</code></pre>
+<pre data-os="mac" hidden><code>python -m streamlit run Streamlit/us_county_explorer.py</code></pre>
       <p>It opens at <code>http://localhost:8501</code> and reads the committed files in <code>data/raw/</code>. Restart the server after changing <code>.env</code> or anything in <code>analysis/</code>: Streamlit's Rerun button does not reload changed modules.</p>
     </li>
     <li><b>Optional: refresh the data from the Census Bureau</b>
@@ -502,7 +502,7 @@ python ingestion/pull_rucc.py</code></pre>
   <h3>The three tabs</h3>
   <div class="pair">
     <div class="flow-step"><div class="flow-kicker">Tab 1</div><h3>Welcome</h3><p>Three starting steps, four goal cards (find a number, write a grant application, compare counties, check reliability), a plain explanation of margins of error and the CV color scale, a worked grant-writing example, and short FAQs (Katie Christiansen's design).</p></div>
-    <div class="flow-step"><div class="flow-kicker">Tab 2</div><h3>County explorer</h3><p>Pick a state, then a county, on the map or in the search box. The map colors counties by the chosen measure's CV. Below it: the "Ask about this county" panel and the 26 cards, grouped by topic, each with its interval, CV, reliability strip and an optional "Compare to state" row.</p></div>
+    <div class="flow-step"><div class="flow-kicker">Tab 2</div><h3>County explorer</h3><p>Pick a state, then a county, on the map or in the search box. The map colors counties by the chosen measure's CV. Below it: the "Ask about this county" panel and the 26 cards, grouped by topic, each with its interval, CV, reliability strip and an optional "Compare to state" row. Under the cards, "Download these cards (Excel)" saves every chosen card's figures, one row per card, with a data dictionary tab.</p></div>
     <div class="flow-step"><div class="flow-kicker">Tab 3</div><h3>Statistical peers</h3><p>For one measure, every county whose estimate cannot be told apart from the selected county's at 90% confidence, on its own map and in a ranked table, with optional same-metro-class and same-size gates.</p></div>
   </div>
 
@@ -836,6 +836,9 @@ python ingestion/pull_rucc.py</code></pre>
     <div><b>Margin of error (MOE)</b>The half-width the Bureau publishes at 90% confidence. The 90% interval is the estimate plus and minus it.</div>
     <div><b>Standard error (SE)</b>MOE ÷ 1.645: the typical size of sampling error.</div>
     <div><b>Coefficient of variation (CV)</b>SE ÷ estimate. A unit-free measure of how large the sampling error is relative to the number.</div>
+    <div><b>Esri (ESRI) reliability lines</b>Esri, the company behind the ArcGIS mapping software, republishes ACS estimates in its demographic data and labels each one by its CV: high reliability below 12%, medium from 12% to 40%, low above 40%. Many planners and GIS analysts meet ACS data through these labels. The dashboard borrows the 12% line: it is where the sampling sub-score reaches 75 and the upper edge of the Higher reliability band. <a href="#citations">Source</a>.</div>
+    <div><b>NCHS reliability line</b>The National Center for Health Statistics, the CDC's statistical agency, sets federal data presentation standards. They flag rates and counts whose relative standard error (the same quantity as the CV) is above 30% as unreliable. The dashboard borrows this 30% line: it is where the sampling sub-score reaches 50 and the edge between the Moderate and Lower reliability bands. <a href="#citations">Source</a>.</div>
+    <div><b>Why borrow these lines</b>The Census Bureau publishes a margin of error for every estimate but sets no single CV cutoff for "reliable." Esri's 12% and NCHS's 30% are two widely used outside conventions, so anchoring the score to them lets a reader compare its bands with rules they may already know. They are reading aids, not Census Bureau rules.</div>
     <div><b>Sampling error</b>Uncertainty from surveying a sample instead of everyone. The only kind the MOE measures.</div>
     <div><b>Imputation (allocation)</b>Filling a skipped answer with a statistically plausible value. Reported in separate allocation tables (B98/B99), without margins.</div>
     <div><b>Controlled estimate</b>A figure the Bureau fixes to its own population estimates, so it has no sampling error and no MOE (total population in most counties).</div>
@@ -858,7 +861,7 @@ python ingestion/pull_rucc.py</code></pre>
   <p>American Community Survey (2020-2024, 5-year). USDA ERS Rural-Urban Continuum Codes (2023).</p>
   <p>This is a student capstone demonstration. It is not an official Census Bureau product.</p>
   <p>Authors: Andrew Swiniarski, Justus Long, Katie Christiansen, Garrett Spangler, Theodore Ruth · Georgetown University MSBA Capstone · Partner: U.S. Census Bureau · Completion date: TBD · License: CC0 1.0</p>
-  <p><a href="https://www.census.gov">census.gov</a> · <a href="https://github.com/andrewswiniarski-hue/Census_Uncertainty_Analysis">GitHub repository</a></p>
+  <p><a href="https://www.census.gov">census.gov</a> · <a href="https://github.com/Justus688/Final-Handoff-Census-Uncertainty-Saxa-3-">GitHub repository</a></p>
 </footer>
 </div>
 

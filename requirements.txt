@@ -2,9 +2,9 @@
 #
 # Setup (from repo root):
 #   python -m venv .venv
-#   .venv\Scripts\activate           (Windows)
+#   .venv\Scripts\Activate.ps1        (Windows PowerShell)
 #   source .venv/bin/activate        (Mac/Linux)
-#   pip install -r requirements.txt
+#   python -m pip install -r requirements.txt
 #
 # Versions are pinned to the set verified together on Python 3.13.5
 # (2026-10-25: all four dashboard pulls run from an empty data/raw/, the full
@@ -25,3 +25,5 @@ topojson==2.2          # shared-border-aware geometry simplification (nationwide
                        # shapely.simplify preserves each polygon's own validity but not shared
                        # borders with its neighbors, which creates slivers at national tolerances
 anthropic==1.15.0      # Claude API client for the dashboard's "Ask about this county" assistant
+Brotli==1.2.0          # compressed API replies. anthropic's HTTP client needs 1.2+ whenever Brotli is
+                       # installed; Anaconda ships 1.0.9, which broke every assistant call (2026-11-07)

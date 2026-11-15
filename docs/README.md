@@ -1,6 +1,6 @@
 # /docs — project documentation
 
-Start with [`../HANDOVER.html`](../HANDOVER.html) at the repo root: it summarizes these documents and links to each one.
+Start with [`../VISUAL_GUIDE.html`](../VISUAL_GUIDE.html) at the repo root: it summarizes these documents and links to each one.
 
 | File | Purpose | Status |
 |------|---------|--------|
@@ -18,6 +18,6 @@ Start with [`../HANDOVER.html`](../HANDOVER.html) at the repo root: it summarize
 | [`project-brief.md`](project-brief.md) | The team's original project brief: research questions, deliverables, scope decisions over time, the Phase 1 checklist, milestones, and the full list of open questions for Census mentors | The repo's README until 2026-10-31 |
 | [`design-specs/`](design-specs/) | Design specs written before each dashboard build: population data-quality card, Census Bureau branding shell, Statistical peers tab, card reliability score (decision #19), county AI assistant (decision #20) | Design records; file names inside are updated to the current ones |
 | [`meeting-decks/`](meeting-decks/) | Slide decks from mentor meetings and team reviews: the July 22 biweekly, team recap, user-needs research, dashboard variable shortlist, two EDA 14 slides | Meeting history; the final presentation will be `presentation.pdf` |
-| [`handover/figures/`](handover/figures/) | Research charts used by `HANDOVER.html`, extracted from the committed notebook outputs | 2026-10-25 |
+| [`handover/figures/`](handover/figures/) | Research charts used by `VISUAL_GUIDE.html`, extracted from the committed notebook outputs | 2026-10-25 |
 
 **Final deliverables (to be added):** the final report as `final_report.pdf` and the final presentation as `presentation.pdf`, both in this folder.

@@ -6,7 +6,7 @@
 
 Its data files are committed in `data/raw/`, so `streamlit run Streamlit/us_county_explorer.py` works straight after cloning; the four pulls below refresh them.
 
-**How v7 came to be.** v1.1 (Justus Long, the nationwide county explorer) → v1.2 (Katie Christiansen's redesigned welcome page) → v2 (Andrew Swiniarski: every US county, 26 measures, error-bar cards) → v3 (the card reliability score, 2026-09-27) → v6 (Justus Long: Statistical peers tab, ranked peers, Census Bureau branding shell, with Katie Christiansen's v5 welcome page) → v7 (Andrew Swiniarski: the assistant). The earlier files (v1.1–v3, and the Trenton grant data prototype `app.py`, NJ tracts, a learning instrument) remain on `main`; v6 is on the `county-ai-assistant` and `JL_Work_Tree` branches. [`HANDOVER.html`](../HANDOVER.html) at the repo root explains how v7 works.
+**How v7 came to be.** v1.1 (Justus Long, the nationwide county explorer) → v1.2 (Katie Christiansen's redesigned welcome page) → v2 (Andrew Swiniarski: every US county, 26 measures, error-bar cards) → v3 (the card reliability score, 2026-09-27) → v6 (Justus Long: Statistical peers tab, ranked peers, Census Bureau branding shell, with Katie Christiansen's v5 welcome page) → v7 (Andrew Swiniarski: the assistant). The earlier files (v1.1–v3, and the Trenton grant data prototype `app.py`, NJ tracts, a learning instrument) remain on `main`; v6 is on the `county-ai-assistant` and `JL_Work_Tree` branches. [`VISUAL_GUIDE.html`](../VISUAL_GUIDE.html) at the repo root explains how v7 works.
 
 ## US county dashboard (v7): the "Ask about this county" assistant
 

@@ -2519,7 +2519,7 @@ def geography_search_control(search_slot, data: dict, filtered_county_df: pd.Dat
 # statistics background assumed. First tab, selected by default (st.tabs'
 # own behavior -- the first tab passed to it is the initial selection).
 # Every term gets a one-line definition on first use (the team's house rule),
-# the same rule the "How this app works" section of HANDOVER.html follows.
+# the same rule the "How this app works" section of VISUAL_GUIDE.html follows.
 # ---------------------------------------------------------------------------
 
 def render_welcome() -> None:

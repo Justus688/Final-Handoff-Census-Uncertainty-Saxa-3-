@@ -29,6 +29,12 @@ Ground rules:
 
 ## Log
 
+### 2026-11-15 — Justus Long (with Claude) — Handoff repo, visual guide renamed, demo video
+- **Area:** docs / project management
+- **What was done:** The handoff now lives in its own repository (github.com/Justus688/Final-Handoff-Census-Uncertainty-Saxa-3-), where this branch is `main`; the clone instructions point there. `HANDOVER.html` was renamed `VISUAL_GUIDE.html` so it is not confused with `HANDOFF.md` (the technical appendix), and every live reference was updated. The final demo video is committed as `final_deliverables/Final_Demo_2.mp4`. Completion date set to November 19, 2026.
+- **Findings / decisions:** Dated WORKLOG entries keep the old name `HANDOVER.html`, because they record what the file was called at the time.
+- **Files:** VISUAL_GUIDE.html (was HANDOVER.html), README.md, HANDOFF.md, Streamlit/README.md, docs/README.md, Streamlit/us_county_explorer.py (comment), final_deliverables/Final_Demo_2.mp4.
+
 ### 2026-11-07 — Justus Long (with Claude) — Katie's Welcome edits, assistant fix, setup steps, card download
 - **Area:** dashboard / docs
 - **What was done:** Brought Katie's Welcome-page edits from `JL_Work_Tree` (b3758de, 2026-11-06) into `Streamlit/us_county_explorer.py`: question-style headings, reworded steps and goals, five new glossary pills, equal-height step cards. Only the Welcome changes were taken, because her file is v6 and has no assistant. Fixed the assistant failing for anyone who ran the app from Anaconda's Python. Rewrote the README setup for Windows so it never relies on plain `pip` or on PATH. Added a Troubleshooting section. Added "Download these cards (Excel)" under the County explorer cards: a Cards sheet, one row per chosen card, and a Data dictionary sheet defining every column.

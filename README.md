@@ -3,12 +3,12 @@
 ## 📌 Project Overview & Metadata
 
 **Author(s):** Andrew Swiniarski, Justus Long, Katie Christiansen, Garrett Spangler, Theodore Ruth
-**Completion Date:** TBD
+**Completion Date:** November 19, 2026
 **Partner Organization:** U.S. Census Bureau
 **Program:** Georgetown University, MS in Business Analytics (MSBA) Capstone
 **License:** [CC0 1.0 Universal](LICENSE) (public domain dedication) for the team's code and documents; the committed Census Bureau and USDA data are U.S. government works
 
-> **Visual guide:** after cloning, open [`HANDOVER.html`](HANDOVER.html) in a web browser. It walks through how the dashboard works (with diagrams, a worked example and an interactive reliability-score calculator), the data pipeline, the research findings and the tech stack. GitHub shows that file as code, so it has to be opened locally.
+> **Visual guide:** after cloning, open [`VISUAL_GUIDE.html`](VISUAL_GUIDE.html) in a web browser. It walks through how the dashboard works (with diagrams, a worked example and an interactive reliability-score calculator), the data pipeline, the research findings and the tech stack. GitHub shows that file as code, so it has to be opened locally.
 
 ### Core Goals & Problem Statement
 
@@ -34,6 +34,7 @@
 │                               #   score, dashboard data loaders, the optional AI assistant
 ├── ingestion/                  # One script per data download from the Census Data API / USDA,
 │                               #   each with its own sanity checks (shared helpers in _common.py)
+├── final_deliverables/         # Final demo video (Final_Demo_2.mp4)
 ├── data/
 │   ├── raw/                    # Source data exactly as downloaded. The 7 files the dashboard
 │   │                           #   reads are committed; research data is downloaded by scripts
@@ -49,7 +50,7 @@
 │   ├── project-brief.md        # Research questions, scope history, open questions for mentors
 │   ├── design-specs/           # Design records for each dashboard feature
 │   ├── meeting-decks/          # Slides from mentor meetings and team reviews
-│   ├── handover/figures/       # Research charts used by HANDOVER.html
+│   ├── handover/figures/       # Research charts used by VISUAL_GUIDE.html
 │   └── *.md                    # Methodology notes, user research, allocation studies, API receipts
 ├── tools/                      # Product Scope Tracker: catalog of ~573 Census data products
 ├── product_report.html         # The tracker's generated report (open in a browser)
@@ -58,7 +59,7 @@
 ├── notes/                      # Drop-in notes the tracker ingests
 ├── verify_api_surfaces.py      # Re-checks what each product publishes; writes docs/api-surface-verified.md
 ├── report_alloc_denominators.py, report_alloc_profile.py   # Regenerate the two allocation studies in docs/
-├── HANDOVER.html               # Visual guide to the project (open locally in a browser)
+├── VISUAL_GUIDE.html           # Visual guide to the project (open locally in a browser)
 ├── HANDOFF.md                  # Technical appendix: the 20 methodology decisions, data caveats
 ├── WORKLOG.md                  # Dated record of who did what and what was found
 ├── .env.example                # Template for the local .env file holding API keys (never committed)
@@ -74,7 +75,8 @@
 * 📄 **Final Report:** `docs/final_report.pdf` *(to be added)*
 * 📊 **Presentation Deck:** `docs/presentation.pdf` *(to be added)*
 * 🗺️ **Dashboard:** [`Streamlit/us_county_explorer.py`](Streamlit/us_county_explorer.py), the US County Demographic Explorer
-* 🧭 **Visual guide:** [`HANDOVER.html`](HANDOVER.html), open locally in a browser
+* 🎬 **Demo video:** [`final_deliverables/Final_Demo_2.mp4`](final_deliverables/Final_Demo_2.mp4)
+* 🧭 **Visual guide:** [`VISUAL_GUIDE.html`](VISUAL_GUIDE.html), open locally in a browser
 * 🔬 **Research findings:** [`docs/phase1-findings-report.md`](docs/phase1-findings-report.md) and [`notebooks/`](notebooks/)
 * 🗂️ **Product Scope Tracker:** [`tools/`](tools/) and its report [`product_report.html`](product_report.html)
 
@@ -195,7 +197,7 @@ Or simply open the committed [`product_report.html`](product_report.html) in a b
   * **Imputation:** measured from the Bureau's allocation tables, which report how many answers were filled in (notebooks 05, 08, 09).
   * **The reliability score (dashboard cards):** a 0–100 score that averages a sampling sub-score (from the CV) and, for income and poverty figures, an imputation sub-score (how the county's imputation rate ranks against every U.S. county). The label (Higher, Moderate or Lower reliability) is never better than the CV alone would give.
   * **Statistical peers:** counties whose estimate cannot be told apart from the selected county's at 90% confidence.
-* **Decision Logic:** the project lead's 20 numbered decisions are listed in full in [`HANDOFF.md`](HANDOFF.md) and summarized in `HANDOVER.html`. The ones that most shape the results:
+* **Decision Logic:** the project lead's 20 numbered decisions are listed in full in [`HANDOFF.md`](HANDOFF.md) and summarized in `VISUAL_GUIDE.html`. The ones that most shape the results:
   * The newest release is used: ACS 2020–2024 5-year estimates (vintage 2024), the only ACS product published for every county.
   * A zero or missing estimate has no CV and is reported separately, never treated as "infinitely unreliable".
   * Median household income published as the top-code $250,001 has its margin set aside, because a censored value would look falsely precise.

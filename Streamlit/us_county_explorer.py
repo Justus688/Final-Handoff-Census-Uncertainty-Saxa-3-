@@ -2824,21 +2824,37 @@ def _peer_list_limit(choice: str | None = None) -> int | None:
         return 25
 
 
+def _peer_rate_column_name(measure_key: str) -> str:
+    """Rate header naming the measure's own base, as its card does, e.g.
+    "Rate (% of households limited-English-speaking)". The base is the
+    measure's universe (households, the civilian labor force, ...), not
+    total population."""
+    return f"Rate (% {MEASURES[measure_key].rate_label})"
+
+
+# "Rank tied counties by" choices; the estimate is the default.
+PEER_RANK_EST = "Estimate (the card's main number)"
+PEER_RANK_RATE = "Rate (%)"
+
+
 def _peer_display_table(
-    peers: pd.DataFrame, *, labels: dict, self_est: float
+    peers: pd.DataFrame, *, labels: dict, self_est: float,
+    rank_on: str = "est", rate_col: str = "Rate (%)",
 ) -> pd.DataFrame:
     """Ranked peer rows. Index stays the county `_key`.
 
-    Rank 1 is the published estimate closest to the selected county.
-    Identical estimates share a rank (min). Similarity is 100 when the
-    estimates match and falls toward 0 as the absolute gap grows relative
-    to the selected county's estimate. CV is the 0-1 coefficient of
-    variation ((MOE / 1.645) / estimate), same convention as the cards
-    and map.
+    Rank 1 is the county closest to the selected county on `rank_on`
+    ("est", the default, or "rate"); `self_est` is the selected county's
+    value on that same column. Identical values share a rank (min).
+    Similarity is 100 when the values match and falls toward 0 as the
+    absolute gap grows relative to the selected county's value. CV is the
+    0-1 coefficient of variation ((MOE / 1.645) / estimate), same
+    convention as the cards and map. A `rate` column, when present, is
+    shown next to Estimate under `rate_col`.
     """
     table = peers.copy()
     table["County"] = [labels.get(k, k) for k in table.index]
-    table["Distance"] = (table["est"] - self_est).abs()
+    table["Distance"] = (table[rank_on] - self_est).abs()
     table["Rank"] = table["Distance"].rank(method="min").astype("int64")
     denom = abs(float(self_est))
     if not np.isfinite(denom) or denom == 0.0:
@@ -2847,22 +2863,39 @@ def _peer_display_table(
     table["CV"] = moe_to_cv(table["est"], table["moe"])
     table = table.sort_values(["Distance", "County"], kind="mergesort")
     moe_col = _peer_moe_column_name()
-    return table[["Rank", "County", "Similarity", "est", "moe", "CV"]].rename(
-        columns={"est": "Estimate", "moe": moe_col}
-    )
+    cols = ["Rank", "County", "Similarity", "est"] + (["rate"] if "rate" in table else []) + ["moe", "CV"]
+    return table[cols].rename(columns={"est": "Estimate", "moe": moe_col, "rate": rate_col})
 
 
 def _listed_peer_table(
     peers: pd.DataFrame, *, labels: dict, self_est: float, limit: int | None,
+    rank_on: str = "est", rate_col: str = "Rate (%)",
 ) -> pd.DataFrame:
     """Ranked peer rows, capped at `limit` (None = all). Index is county `_key`."""
-    table = _peer_display_table(peers, labels=labels, self_est=self_est)
+    table = _peer_display_table(peers, labels=labels, self_est=self_est, rank_on=rank_on, rate_col=rate_col)
     if limit is None:
         return table
     return table.head(limit)
 
 
-def _peer_display_column_config() -> dict:
+def _ranked_peer_rows(result: PeerResult, data: dict, code: str, limit: int | None) -> pd.DataFrame:
+    """The tied counties as the peer table and the peer map list them:
+    card figures, ranked on the "Rank tied counties by" choice (the
+    estimate unless the user picked the rate). One helper for both, so the
+    table and the map always list the same counties."""
+    peers, card_self_est = _card_peers(result, data["county_df"], code)
+    by_rate = "rate" in peers and st.session_state.get("peer_rank_by") == PEER_RANK_RATE
+    return _listed_peer_table(
+        peers,
+        labels=data["labels_county"],
+        self_est=result.self_est if by_rate else card_self_est,
+        limit=limit,
+        rank_on="rate" if by_rate else "est",
+        rate_col=_peer_rate_column_name(result.measure_key),
+    )
+
+
+def _peer_display_column_config(rate_col: str | None = None) -> dict:
     """Thousands separators on Estimate/MOE; CV as a percent.
 
     NumberColumn formats the display; the values stay numeric so column
@@ -2870,19 +2903,58 @@ def _peer_display_column_config() -> dict:
     without rounding rates to integers.
     """
     moe_col = _peer_moe_column_name()
-    return {
+    config = {
         "Rank": st.column_config.NumberColumn(format="%d"),
         "Similarity": st.column_config.NumberColumn(
             format="%.1f",
-            help="100 = identical published estimate to the selected county.",
+            help="100 = identical value to the selected county, on whichever column the list is ranked by.",
         ),
-        "Estimate": st.column_config.NumberColumn(format="localized"),
-        moe_col: st.column_config.NumberColumn(format="localized"),
+        "Estimate": st.column_config.NumberColumn(
+            format="localized", help="The county's estimate: the main number on its card.",
+        ),
+        moe_col: st.column_config.NumberColumn(
+            format="localized", help="Margin of error of the Estimate column.",
+        ),
         "CV": st.column_config.NumberColumn(
             format="percent",
-            help="Coefficient of variation: (margin of error / 1.645) / estimate.",
+            help="Coefficient of variation of the Estimate: (margin of error / 1.645) / estimate.",
         ),
     }
+    if rate_col:
+        config[rate_col] = st.column_config.NumberColumn(
+            format="%.1f%%",
+            help="The estimate as a percentage of this measure's own base, named in the column header "
+                 "(the same rate the card shows). The base is not total population. Counties are tested "
+                 "for a tie on this rate, so a county's size does not decide the match.",
+        )
+    return config
+
+
+def _card_peers(result: PeerResult, county_df: pd.DataFrame, code: str) -> tuple[pd.DataFrame, float]:
+    """Tied peers on the card's own figures, and the selected county's card
+    estimate to rank them against (2026-11-19).
+
+    For rate-bearing measures the tie test runs on the rate, so
+    result.peers holds rates (12.156 for 12.2%), not the count the card
+    leads with (2,570). Which counties are tied still comes from that rate
+    test; this swaps in each county's card count and margin of error, so
+    the table shows the number on the card, and keeps the rate as `rate`
+    (its header from _peer_rate_column_name()). Medians are already the
+    card's number and pass through unchanged.
+    """
+    measure = MEASURES[result.measure_key]
+    if measure.universe is None:
+        return result.peers, result.self_est
+    est, moe = measure.values(county_df)
+    keys = county_df["_key"]
+    est = pd.Series(est.to_numpy(dtype=float), index=keys)
+    moe = pd.Series(moe.to_numpy(dtype=float), index=keys)
+    peers = pd.DataFrame({
+        "est": est.reindex(result.peers.index),
+        "moe": moe.reindex(result.peers.index),
+        "rate": result.peers["est"],
+    })
+    return peers, float(est[code])
 
 
 def render_peer_panel(data: dict, code: str, label: str) -> PeerResult | None:
@@ -2969,21 +3041,38 @@ def render_peer_panel(data: dict, code: str, label: str) -> PeerResult | None:
             key="peer_list_n",
             help="How many of the closest tied counties to show in the table and on the map.",
         )
-        display = _listed_peer_table(
-            result.peers,
-            labels=data["labels_county"],
-            self_est=result.self_est,
-            limit=_peer_list_limit(list_choice),
-        )
+        is_rate = MEASURES[peer_measure].universe is not None
+        rate_col = _peer_rate_column_name(peer_measure) if is_rate else None
+        if is_rate:
+            st.radio(
+                "Rank tied counties by",
+                [PEER_RANK_EST, PEER_RANK_RATE],
+                index=0,
+                horizontal=True,
+                key="peer_rank_by",
+                help="Changes only the order of the list (and which counties a shorter list keeps). "
+                     "The set of tied counties is the same either way.",
+            )
+            st.caption(
+                "The list is ranked by **Estimate**, the main number on each county's card, by default. "
+                "You can switch to rank by **Rate**: the estimate as a percentage "
+                f"{MEASURES[peer_measure].rate_label.replace('$', chr(92) + '$')} "
+                "(this measure's own base, not total population). "
+                "Either way, the same counties are tied: the tie test always uses the rate, so a "
+                "county's size does not decide the match."
+            )
+        display = _ranked_peer_rows(result, data, code, _peer_list_limit(list_choice))
         st.dataframe(
             display,
             hide_index=True,
             width="stretch",
-            column_config=_peer_display_column_config(),
+            column_config=_peer_display_column_config(rate_col),
         )
+        ranked_on = ("rate" if is_rate and st.session_state.get("peer_rank_by") == PEER_RANK_RATE
+                     else "estimate")
         st.caption(
             f"Showing {len(display):,} of {n_tied:,} statistically tied counties, ranked by "
-            "closeness of the published estimate. Every county listed is still statistically "
+            f"closeness of the {ranked_on} to {label}'s. Every county listed is still statistically "
             f"indistinguishable at {CONFIDENCE_LEVEL_PCT}% confidence."
         )
     return result
@@ -3125,12 +3214,7 @@ def render_peers_tab(data: dict) -> None:
     if not st.session_state.get("peer_map_visible") or n_tied == 0:
         return
 
-    listed = _listed_peer_table(
-        result.peers,
-        labels=data["labels_county"],
-        self_est=result.self_est,
-        limit=_peer_list_limit(),
-    )
+    listed = _ranked_peer_rows(result, data, code, _peer_list_limit())
     if listed.empty:
         return
     listed_keys = set(listed.index)

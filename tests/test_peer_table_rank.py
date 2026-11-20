@@ -139,6 +139,58 @@ def test_panel_and_map_share_the_listed_peer_helper():
     tab = inspect.getsource(app.render_peers_tab)
     assert 'st.selectbox(\n            "Listed counties"' in panel or '"Listed counties"' in panel
     assert "peer_list_n" in panel
-    assert "_listed_peer_table(" in panel
-    assert "_listed_peer_table(" in tab
+    assert "_ranked_peer_rows(" in panel
+    assert "_ranked_peer_rows(" in tab
     assert "set(result.peers.index)" not in tab
+
+
+@pytest.mark.skipif(
+    not (REPO_ROOT / "data" / "raw" / "acs5_2024_usdash_county.parquet").exists(),
+    reason="needs data/raw/acs5_2024_usdash_county.parquet (run ingestion/pull_usdash.py)",
+)
+def test_peer_rows_show_and_rank_on_the_card_figures():
+    """Apache County, AZ on limited-English households (2026-11-19): the
+    table showed 12.156 (Lea County's rate) where the card leads with a
+    count, then ranked on the rate so the counts shown jumped around. Every
+    row must show each county's own card count, CV and rate, and Rank must
+    follow closeness of that count to Apache's card count."""
+    app = _load_app()
+    data = app._load_all()
+    key, code = "Limited English speaking households", "04001"
+    result = app._compute_peers(data["county_df"], code, key, True, True)
+    peers, self_est = app._card_peers(result, data["county_df"], code)
+    table = app._listed_peer_table(peers, labels=data["labels_county"], self_est=self_est, limit=None)
+    assert len(table) == len(result.peers) > 0
+    unavailable = app._unavailable_measures(data)
+    own = app._county_fact_sheet(data, code, unavailable)["measures"][app.assistant_text.measure_id(key)]["values"]
+    assert self_est == pytest.approx(own["estimate"])
+    for peer in table.index:
+        card = app._county_fact_sheet(data, peer, unavailable)["measures"][
+            app.assistant_text.measure_id(key)]["values"]
+        assert table.loc[peer, "Estimate"] == pytest.approx(card["estimate"])
+        assert table.loc[peer, "Rate (%)"] == pytest.approx(card["rate"])
+        assert table.loc[peer, "CV"] == pytest.approx(card["cv"])
+    gaps = (table["Estimate"] - self_est).abs()
+    assert gaps.is_monotonic_increasing
+    # Medians are already the card's number and pass through unchanged
+    median = app._compute_peers(data["county_df"], code, "Median household income", True, True)
+    assert app._card_peers(median, data["county_df"], code) == (median.peers, median.self_est)
+
+
+def test_rate_column_sits_next_to_estimate_and_can_drive_the_rank():
+    """Rate is labelled with the measure's own base (not total population),
+    sits right after Estimate, and ranking on it orders by the rate."""
+    app = _load_app()
+    assert app._peer_rate_column_name("Limited English speaking households") == (
+        "Rate (% of households limited-English-speaking)")
+    peers = pd.DataFrame(
+        {"est": [100.0, 900.0, 500.0], "moe": [10.0, 10.0, 10.0], "rate": [30.0, 11.0, 20.0]},
+        index=["a", "b", "c"],
+    )
+    labels = {"a": "A", "b": "B", "c": "C"}
+    by_est = app._listed_peer_table(peers, labels=labels, self_est=950.0, limit=None, rate_col="Rate (% x)")
+    cols = list(by_est.columns)
+    assert cols[cols.index("Estimate") + 1] == "Rate (% x)"
+    assert list(by_est["County"]) == ["B", "C", "A"]
+    by_rate = app._listed_peer_table(peers, labels=labels, self_est=29.0, limit=None, rank_on="rate")
+    assert list(by_rate["County"]) == ["A", "C", "B"]
